@@ -1,3 +1,75 @@
+# Hacker101 CTF — Micro-CMS v1
+
+### Date: June 6 – July 26, 2026
+
+### Time spent: ~6 hours across multiple days
+
+### Flags found: 4/4
+
+### Techniques Tried
+
+| Time | Technique | URL/Payload | Result |
+| --- | --- | --- | --- |
+| Day 1 | IDOR | /page/1–9, /edit/1–9 | Found Flag #1 at /edit/6 |
+| Day 1 | XSS stored | `<script>alert(1)</script>` in page body | Alert popped, Flag #2 found in page source |
+| Day 1 | SQLi | Single quote `'` appended to /edit/2 → `/edit/2'` | Flag #3 found (SQL error triggered) |
+| Day 1 | XSS variants | `<img src=x onerror=alert(1)>`, `<svg>`, `<iframe>` | No new flag |
+| Day 1 | Parameter tampering | `?admin=true`, `?debug=1` | 200 OK but no effect |
+| Day 1 | HTTP method change | GET→POST, DELETE on /page/10 | 400 or 404 |
+| Day 1 | Header manipulation | X-Forwarded-For, X-Originating-IP | 403 |
+| Day 1 | ID injection in body | POST /page/create with `id=3` in body | 302, server ignored parameter |
+| Day 1 | Page reference in body | `parent=6`, `reference=6`, `page_id=6` | 302, ignored |
+| Day 1 | Content-Type change | application/json on /page/6 | 403 |
+| Day 2 | Path traversal in body | `../../../etc/passwd`, `{{7*7}}`, `${7*7}` | No result |
+| Day 2 | Non-integer ID | `/edit/2a`, `/edit/2%00`, `/edit/2.0`, `/edit/02` | Various 400/404 |
+| Day 2 | Delete endpoints | `/page/10/delete`, DELETE /page/10 | 404 |
+| Day 2 | Restore endpoints | `/trash`, `/deleted`, `/restore/6`, `/api/restore/6` | 404 |
+| Day 2 | Negative IDs | /page/0, /page/-1 to /page/-4 | 404 |
+| Day 2 | Hidden endpoints | /api, /flag, /secret, /robots.txt | 404 |
+| Jul 26 | XSS in title field | `<a href="/page/6">Click me</a>` in title | Flag #4 found on homepage render |
+
+### Flag Breakdown
+
+**Flag #1 — IDOR**
+Enumerate `/edit/{id}` manually. Page 6 existed but was not linked. Different server responses matter: 403 = exists but blocked, more interesting than 404.
+
+**Flag #2 — Stored XSS**
+Paste `<script>alert(1)</script>` in page body → save → view page source. Flag was in the source, not in the alert.
+
+**Flag #3 — SQL Error**
+Append `'` to the edit URL: `/edit/2'`. Response changed — SQL error triggered. Flag in error output.
+
+**Flag #4 — XSS in Title (Stored, Different Rendering Context)**
+Put `<a href="/page/6">Click me</a>` in the **title** field. The homepage renders titles differently — as part of a hyperlink — creating a different XSS context. Flag appeared on the homepage after navigating back.
+
+Key insight from the hint: "Sometimes a given input will affect more than one page" + "the bug doesn't exist in the most obvious place this input is shown." The title renders harmlessly on the edit page but dangerously on the homepage.
+
+### What I Learned
+
+- **USER INPUT ALMOST NEVER HAS ONLY ONE DESTINATION.** When you inject something, trace where it flows — edit page, homepage, API, logs — each is a different rendering context with different rules.
+- 403 on IDOR is more interesting than 404. It means the resource exists but you're blocked — worth investigating further.
+- XSS in a title field looks harmless until you check the homepage, profile pages, notification feeds — anywhere the title is reused.
+- SQL injection doesn't need to produce a working attack. An error message alone can contain a flag or useful information.
+- Decoding reference for future hunts:
+  - `%3C%3E%22` → URL decode
+  - `SGVsbG8=` → Base64 decode
+  - `&lt;script&gt;` → HTML decode
+  - `48656c6c6f` → Hex decode
+
+### Future Hunting Rule
+
+When a hint or observation suggests data is reused — stop focusing on payloads and start tracing where the data flows through the application. Different rendering contexts create different vulnerabilities.
+
+### Hypothesis for Flag #4 (before finding it)
+
+Title field input flows to at least two places: the edit page and the homepage listing. The homepage likely renders titles without the same sanitisation as the edit page. Injecting a link or script into the title and navigating to the homepage should trigger it in a different context.
+
+**Confirmed correct.**
+
+---
+
+# Documentations
+
 > 7 points - Easy difficulty
 > 
 
