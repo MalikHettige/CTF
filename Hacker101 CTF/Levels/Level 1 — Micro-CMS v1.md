@@ -1,6 +1,6 @@
 # Hacker101 CTF — Micro-CMS v1
 
-### Date: June 6 – July 26, 2026
+### Date: June 6 and July 26, 2026
 ### Time spent: ~6 hours across multiple days
 ### Flags found: 4/4
 
