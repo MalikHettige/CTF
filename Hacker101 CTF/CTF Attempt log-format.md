@@ -9,7 +9,7 @@
 | Time | Technique | URL/Payload | Result |
 | --- | --- | --- | --- |
 | [fill] | IDOR | /page/3-9, /page/6 | 404 or 403 |
-| [fill] | XSS stored | <img src=x onerror=alert(1)> | Alert popped, same flag |
+| [fill] | XSS stored | [<img src=x onerror=alert(1)>] | Alert popped, same flag |
 | [fill] | XSS variants | <script>, <svg>, <iframe>, markdown links | No new flag |
 | [fill] | SQLi | ' in parameters | Found flag #3 |
 | [fill] | Parameter tampering | ?admin=true, ?debug=1 | No result |
