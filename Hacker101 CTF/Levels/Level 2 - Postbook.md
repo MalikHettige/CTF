@@ -1,70 +1,65 @@
-# Hacker101 CTF — Micro-CMS v1
+# Hacker101 CTF — Photo Gallery (Easy, 7 pts)
 
-### Date: June 6 – July 26, 2026
+### Date: August 6, 2026
 
-### Time spent: ~6 hours across multiple days
+### Time spent: ~3 hours
 
-### Flags found: 4/4
+### Flags found: 5/5 (enough to unlock private programs)
 
 ### Techniques Tried
 
 | Time | Technique | URL/Payload | Result |
 | --- | --- | --- | --- |
-| Day 1 | IDOR | /page/1–9, /edit/1–9 | Found Flag #1 at /edit/6 |
-| Day 1 | XSS stored | `<script>alert(1)</script>` in page body | Alert popped, Flag #2 found in page source |
-| Day 1 | SQLi | Single quote `'` appended to /edit/2 → `/edit/2'` | Flag #3 found (SQL error triggered) |
-| Day 1 | XSS variants | `<img src=x onerror=alert(1)>`, `<svg>`, `<iframe>` | No new flag |
-| Day 1 | Parameter tampering | `?admin=true`, `?debug=1` | 200 OK but no effect |
-| Day 1 | HTTP method change | GET→POST, DELETE on /page/10 | 400 or 404 |
-| Day 1 | Header manipulation | X-Forwarded-For, X-Originating-IP | 403 |
-| Day 1 | ID injection in body | POST /page/create with `id=3` in body | 302, server ignored parameter |
-| Day 1 | Page reference in body | `parent=6`, `reference=6`, `page_id=6` | 302, ignored |
-| Day 1 | Content-Type change | application/json on /page/6 | 403 |
-| Day 2 | Path traversal in body | `../../../etc/passwd`, `{{7*7}}`, `${7*7}` | No result |
-| Day 2 | Non-integer ID | `/edit/2a`, `/edit/2%00`, `/edit/2.0`, `/edit/02` | Various 400/404 |
-| Day 2 | Delete endpoints | `/page/10/delete`, DELETE /page/10 | 404 |
-| Day 2 | Restore endpoints | `/trash`, `/deleted`, `/restore/6`, `/api/restore/6` | 404 |
-| Day 2 | Negative IDs | /page/0, /page/-1 to /page/-4 | 404 |
-| Day 2 | Hidden endpoints | /api, /flag, /secret, /robots.txt | 404 |
-| Jul 26 | XSS in title field | `<a href="/page/6">Click me</a>` in title | Flag #4 found on homepage render |
+| Attempt 1 | IDOR | Changed `id` parameter in post URL | Flag #1 found |
+| Attempt 2 | IDOR on profile | Changed profile `id` to `b` | Accessed admin account (no new flag — already claimed) |
+| Attempt 3 | SQLi | Appended `'` to URL | App sanitized to `%27`, no result |
+| Attempt 4 | XSS stored | `<script>alert(1)</script>` in post body | Sanitized — no result |
+| Attempt 4 | XSS variants | `<img src=x onerror=alert(1)>`, `<img src=x onerror=alert('XSS')>` | All sanitized |
+| Attempt 5 | IDOR on edit page | `/edit?id=1` | Flag #2 found |
+| Attempt 6 | Delete-post IDOR | Replaced `page=view.php&id=3` with delete URL in intercept | 200 OK but no deletion, no flag |
+| Attempt 7 | Hint-based math | `189 * 5 = 945` → `/index.php?page=view.php&id=945` | Flag #3 found |
+| Attempt 8 | Default credentials | Username: `user`, Password: `password` | Flag #4 found |
+| Attempt 9 | IDOR on create-post | Sent POST to create page, changed `id=2` (admin's) in Repeater | Flag #5 found in response |
 
 ### Flag Breakdown
 
-**Flag #1 — IDOR**
-Enumerate `/edit/{id}` manually. Page 6 existed but was not linked. Different server responses matter: 403 = exists but blocked, more interesting than 404.
+**Flag #1 — IDOR on post view**
+After signing in, opened a post and noticed `id` parameter in URL. Changed the value → flag exposed. Classic IDOR — always check ID parameters first.
 
-**Flag #2 — Stored XSS**
-Paste `<script>alert(1)</script>` in page body → save → view page source. Flag was in the source, not in the alert.
+**Flag #2 — IDOR on edit page**
+XSS failed on my own post. Pivoted: IDORed the edit endpoint to `id=1` (someone else's post) instead. Flag exposed at the edit page of another user's content.
 
-**Flag #3 — SQL Error**
-Append `'` to the edit URL: `/edit/2'`. Response changed — SQL error triggered. Flag in error output.
+**Flag #3 — Hint math (obscure ID)**
+Hint said "189 * 5" = 945. Used the existing post URL parameter format: `/index.php?page=view.php&id=945`. Flag exposed. The post existed but was never linked — enumeration would find it.
 
-**Flag #4 — XSS in Title (Stored, Different Rendering Context)**
-Put `<a href="/page/6">Click me</a>` in the **title** field. The homepage renders titles differently — as part of a hyperlink — creating a different XSS context. Flag appeared on the homepage after navigating back.
+**Flag #4 — Default credentials**
+Hint: "The person with username 'user' has a very easy password." Tried `user:password` first guess. Flag exposed. Always try `password`, `123456`, `user`, `admin` before moving on.
 
-Key insight from the hint: "Sometimes a given input will affect more than one page" + "the bug doesn't exist in the most obvious place this input is shown." The title renders harmlessly on the edit page but dangerously on the homepage.
+**Flag #5 — IDOR on create-post (write IDOR)**
+Created a post, found the request in HTTP history, sent to Repeater. Changed the `id` parameter to `2` (admin's ID). Response returned `HTTP/2 302 Found` with flag in body.
 
 ### What I Learned
 
-- **USER INPUT ALMOST NEVER HAS ONLY ONE DESTINATION.** When you inject something, trace where it flows — edit page, homepage, API, logs — each is a different rendering context with different rules.
-- 403 on IDOR is more interesting than 404. It means the resource exists but you're blocked — worth investigating further.
-- XSS in a title field looks harmless until you check the homepage, profile pages, notification feeds — anywhere the title is reused.
-- SQL injection doesn't need to produce a working attack. An error message alone can contain a flag or useful information.
-- Decoding reference for future hunts:
-  - `%3C%3E%22` → URL decode
-  - `SGVsbG8=` → Base64 decode
-  - `&lt;script&gt;` → HTML decode
-  - `48656c6c6f` → Hex decode
+- **IDOR isn't only on read endpoints.** Edit and create endpoints are equally vulnerable — always test write operations too.
+- **XSS being blocked doesn't mean pivot away.** When XSS fails on your own post, try IDORing to someone else's edit page and injecting there. Different access paths, different sanitisation.
+- **HTML encoding clue:** Seeing `&lt;script&gt;` in page source means the app HTML-encodes angle brackets. Standard XSS won't work — need context-specific bypass or a different endpoint.
+- **Profile IDOR with non-numeric values:** Changing ID to `b` accessed admin's account. Non-integer values (letters, null bytes, floats) can bypass ID validation that only checks for integer collision.
+- **Obscure IDs still exist:** A post at ID 945 was accessible via the standard parameter — just never linked. Enumeration (or hints) finds these. In real hunting, tools like `ffuf` with a number range find these automatically.
+- **Default credentials are always worth 30 seconds:** `user:password` is embarrassingly common in production apps, especially internal tools and staging environments.
+- **302 in Repeater doesn't mean failure:** The redirect response body often contains the actual content. Always check the raw response body on 302s — don't just follow the redirect.
 
-### Future Hunting Rule
+### Future Hunting Rules
 
-When a hint or observation suggests data is reused — stop focusing on payloads and start tracing where the data flows through the application. Different rendering contexts create different vulnerabilities.
+- Check every `id`, `post_id`, `user_id`, `page` parameter on every endpoint — GET, POST, PUT, DELETE
+- When XSS is blocked on your content, IDOR to another user's edit page and try there
+- On any app with user accounts: try `admin:admin`, `user:password`, `admin:password` before moving to complex attacks
+- A 302 response in Repeater — always read the body before following the redirect
 
-### Hypothesis for Flag #4 (before finding it)
+---
 
-Title field input flows to at least two places: the edit page and the homepage listing. The homepage likely renders titles without the same sanitisation as the edit page. Injecting a link or script into the title and navigating to the homepage should trigger it in a different context.
+### Milestone
 
-**Confirmed correct.**
+Completing this CTF provided enough Hacker101 points to become eligible for private bug bounty programs on HackerOne.
 
 ---
 
